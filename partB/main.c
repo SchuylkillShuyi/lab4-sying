@@ -1,4 +1,5 @@
 
+
 /*
  * GccApplication4.c
  *
@@ -28,8 +29,8 @@ void Initialize()
 	lcd_init();
 	
 	/*---------------------Set up LED----------------------*/
-	DDRD |= (1<<DDD2); //set PD2 as output for player 1 LED
-	DDRD |= (1<<DDD3); //set PD3 as output for player 2 LED
+	DDRD |= (1<<DDD2); //set PD2 as output for player 1 LED (yellow)
+	DDRD |= (1<<DDD3); //set PD3 as output for player 2 LED (red)
 	
 	/*---------------------Set up buzzer--------------------*/
 	DDRD |= (1<<DDD5); //set pd5 as output
@@ -123,16 +124,13 @@ int GameStart(uint8_t left_win, uint8_t right_win)
 	uint8_t x = 79;
 	uint8_t y = 63;
 	uint8_t block_y_speed = 5;
-	//uint8_t block_x0 = 156;
 	uint8_t block_y0 = 43;
-	//uint8_t block_X1 = 159;
 	uint8_t block_y1 = 83; // define computer controlled block
 	uint8_t user_y0 = 53;
 	uint8_t user_y1 =73; // define user controlled block l
 	uint8_t user_y_speed = 0;
 	
 	
-	//LCD_drawLine(10, 10, 50, 50, RED);
 	if(x_speed == 0)
 	{
 		x_speed = x_speed + 1;
@@ -147,11 +145,13 @@ int GameStart(uint8_t left_win, uint8_t right_win)
 	while (1)
 	{	
 		
-		// user controlled block function 
+		/*----------------user controlled block function-------------*/
+		// invisible
 		LCD_drawBlock(0, user_y0, 3, user_y1, BLACK);
-		if(ADC <400)
+		
+		if(ADC <520) //go up
 		{
-			if(user_y1 <= 122 )
+			if(user_y1 <= 122 )// not to touch the upper bound
 			{
 				user_y_speed = 5;
 			}
@@ -162,9 +162,9 @@ int GameStart(uint8_t left_win, uint8_t right_win)
 			
 			
 		}
-		else if(ADC > 750)
+		else if(ADC > 560) //go down
 		{	
-			if(user_y0 >= 5)
+			if(user_y0 >= 5) //not to touch the lower bound
 			{
 				user_y_speed = -5;
 			
@@ -176,90 +176,83 @@ int GameStart(uint8_t left_win, uint8_t right_win)
 			}
 			
 		}
-		else if (ADC >= 400 && ADC <= 750)
+		else if (ADC >= 520 && ADC <= 560) // stand still
 		{
 			user_y_speed = 0;
 			
 		}
 		user_y0 = user_y0 + user_y_speed;
 		user_y1 = user_y1 + user_y_speed;
-		LCD_drawBlock(0, user_y0, 3, user_y1, RED);
+		LCD_drawBlock(0, user_y0, 3, user_y1, RED); // show the block
 		
-		////////////////////////////////////////////////////////// 
-		//computer block move function
+
+		/*-----------------computer block move function------------------*/
 		LCD_drawBlock(156, block_y0, 159, block_y1, BLACK);
-		if(block_y0 <6)
+		if(block_y0 <6) // go up
 		{
 			block_y_speed = 5;
-			//block_y0 = 0;
-			//block_y1 = 19;
 		}
-		else if(block_y1 > 118)
+		else if(block_y1 > 118) // go down
 		{
 			block_y_speed = -5;
-			//block_y0 = 108;
-			//block_y1 = 127;
 		}
 		block_y0 = block_y0 + block_y_speed;
 		block_y1 = block_y1 + block_y_speed;
 		LCD_drawBlock(156, block_y0, 159, block_y1, RED);
-		////////////////////////////////////////
-		//circle move function
-		LCD_drawCircle(x, y, 4, BLACK);
-		if(y <= 2 ) // up boundary detection
-		{	OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 but I want it to be quite right now
+
+		/*---------------------circle move function-----------------------*/
+		LCD_drawCircle(x, y, 4, BLACK); //invisible
+		if(y <= 2 ) // up boundary detection (r=2)
+		{	OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 
 			OCR0B = OCR0A/2;
 			_delay_ms(300);
 			OCR0A = 0; //stop the buzzer
 			OCR0B = OCR0A/2;
-			y_speed = -1 * y_speed;
+			y_speed = -1 * y_speed; // go back
 		}
-		else if(y >=125) //bottom boundary detection
+		else if(y >=125) //bottom boundary detection (127-2)
 		{	
-			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 but I want it to be quite right now
+			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18
 			OCR0B = OCR0A/2;
 			_delay_ms(300);
 			OCR0A = 0; //stop the buzzer
 			OCR0B = OCR0A/2;
-			y_speed = -1 * y_speed;
+			y_speed = -1 * y_speed; // go back
 		}
 		else if(x <= 3) // left boundary detection and round detection
 		{
 			x_speed = -1 * x_speed;
-			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 but I want it to be quite right now
+			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18
 			OCR0B = OCR0A/2;
 			_delay_ms(300);
 			OCR0A = 0; //stop the buzzer
 			OCR0B = OCR0A/2;
-			if(y < user_y0 || y > user_y1)
+			if(y < user_y0 || y > user_y1) // right wins
 			{	
 				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
 				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
-				PORTD |= (1<<PORTD3);
+				PORTD |= (1<<PORTD3); //turn on the red LED
 				_delay_ms(1000);
-				PORTD &= ~(1<<PORTD3);
-				//*right_win = *right_win + 1;
+				PORTD &= ~(1<<PORTD3); //turn off the red LED
 				return 0; //right wins return 0
-				//break;
 			}
 		}
 		else if(x >= 157)// right boundary detection and round detection
 		{
 			x_speed = -1 * x_speed;
-			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 but I want it to be quite right now
+			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 
 			OCR0B = OCR0A/2;
 			_delay_ms(300);
 			OCR0A = 0; //stop the buzzer
 			OCR0B = OCR0A/2;
-			if (y < block_y0 || y > block_y1 )
+			if (y < block_y0 || y > block_y1 ) // left wins
 			{	
 				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
 				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
-				PORTD |= (1<<PORTD2);
+				PORTD |= (1<<PORTD2); // turn on the yellow LED
 				_delay_ms(1000);
-				PORTD &= ~(1<<PORTD2);
+				PORTD &= ~(1<<PORTD2); // turn off the yellow LED
 				return 1; //left wins return 1
-				//break;
 			}
 		}
 		x = x + x_speed; //relocate x and y
@@ -281,7 +274,7 @@ int GameStart(uint8_t left_win, uint8_t right_win)
 			y =125;
 		}
 		LCD_drawCircle(x, y, 4, GREEN);
-		/////////////////////////////////////////////////
+		
 	}
 }
 int main(void)
@@ -294,11 +287,11 @@ int main(void)
 	{	if(left_win < 50 && right_win < 50)
 		{ 
 			result = GameStart(left_win, right_win);
-			if(result == 0)
+			if(result == 0) // right wins
 			{
 				right_win = right_win + 1;
 			}
-			else
+			else //left wins
 			{
 				left_win = left_win + 1;
 			}
