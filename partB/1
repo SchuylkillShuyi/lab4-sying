@@ -116,13 +116,7 @@ ISR (ADC_vect)
 	//UART_putstring(String);
 }
 
-void User_Paddle()
-{
-	uint8_t user_y0 = 53;
-	uint8_t user_y1 =73; // define user controlled block l
-	uint8_t user_y_speed = 0;
-	
-}
+
 
 int Game_Modes(uint8_t left_win, uint8_t right_win)
 {	
@@ -136,9 +130,9 @@ int Game_Modes(uint8_t left_win, uint8_t right_win)
 	uint8_t block_y_speed = 5;
 	uint8_t block_y0 = 43;
 	uint8_t block_y1 = 83; // define computer controlled block
-	//uint8_t user_y0 = 53;
-	//uint8_t user_y1 =73; // define user controlled block l
-	//uint8_t user_y_speed = 0;
+	uint8_t user_y0 = 53;
+	uint8_t user_y1 =73; // define user controlled block l
+	uint8_t user_y_speed = 0;
 	
 	/*----------------------keep moving--------------------*/
 	if(x_speed == 0)
