@@ -1,0 +1,335 @@
+/*
+ * GccApplication4.c
+ *
+ * Created: 11/5/2021 3:10:28 PM
+ * Author : ysy10
+ */ 
+
+#define F_CPU 16000000UL
+#define BAUD_RATE 9600
+#define BAUD_PRESCALER (((F_CPU / (BAUD_RATE * 16UL))) - 1)
+#define R 6
+#define L 3
+#define X_CENTER 79
+#define Y_CENTER 63
+
+
+#include <avr/io.h>
+#include "ST7735.h"
+#include "LCD_GFX.h"
+#include <time.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include "uart.h"
+#include <stdlib.h>
+#include <stdio.h>
+
+char String[25];
+
+void Initialize()
+{
+	/*---------------------setup for ADC--------------------*/
+	// clear power reduction for ADC
+	PRR &= ~(1<<PRADC);
+	
+	//select Vref = AVcc
+	ADMUX |= (1<<REFS0);
+	ADMUX &= ~(1<<REFS1);
+	
+	//set the ADC Clock div by 128
+	//16M/128=125kHz
+	ADCSRA |= (1<<ADPS0);
+	ADCSRA |= (1<<ADPS1);
+	ADCSRA |= (1<<ADPS2);
+	
+	//select channel 0
+	ADMUX &= ~(1<<MUX0);
+	ADMUX &= ~(1<<MUX1);
+	ADMUX &= ~(1<<MUX2);
+	ADMUX &= ~(1<<MUX3);
+	
+	//Set to auto trigger
+	ADCSRA |= (1<<ADATE);
+	
+	//set to free running
+	ADCSRB &= ~(1<<ADTS0);
+	ADCSRB &= ~(1<<ADTS1);
+	ADCSRB &= ~(1<<ADTS2);
+	
+	//Disable digital input buffer on ADC pin
+	DIDR0 |= (1<<ADC0D);
+	
+	// Enable ADC
+	ADCSRA |= (1<<ADEN);
+	
+	//Enable ADC Interrupt
+	ADCSRA |= (1<<ADIE);
+	
+	//Start Conversion
+	ADCSRA |= (1<<ADSC);
+	
+	/*---------------------Set up LED----------------------*/
+	//PD2 is output for yellow LED (user win)
+	DDRD |= (1<<DDD2); 
+	
+	//PD3 is output for red LED (computer win)
+	DDRD |= (1<<DDD3); 
+	
+	/*---------------------Set up buzzer--------------------*/
+	//PD5 is output for buzzer
+	DDRD |= (1<<DDD5); 
+	
+	//timer0 for phase correct	
+	//set timer0 to be divided by 1024, which is 15625 Hz
+	TCCR0B |= (1<<CS00); 
+	TCCR0B &= ~(1<<CS01); 
+	TCCR0B |= (1<<CS02);
+	
+	//set timer0 to PWM phase correct mode
+	TCCR0A |= (1<<WGM00);
+	TCCR0A &= ~(1<<WGM01);
+	TCCR0B |= (1<<WGM02);
+	
+	// clear OC0B on compare match
+	TCCR0A &= ~(1<<COM0B0);
+	TCCR0A |= (1<<COM0B1);
+	
+	// clear interrupt flag
+	TIFR0 |= (1<<OCF0A);
+	
+	// mute at the beginning
+	OCR0A = 0; 
+	
+	//set duty cycle as 5%
+	OCR0B = OCR0A* 0.95;
+
+	/*-------------------Set up LCD------------------------*/
+	lcd_init();
+	
+	sei();
+}
+
+
+ISR (ADC_vect)
+{
+	//sprintf(String,"ADC : %d \n", ADC);
+	//UART_putstring(String);
+}
+
+void User_Paddle()
+{
+	uint8_t user_y0 = 53;
+	uint8_t user_y1 =73; // define user controlled block l
+	uint8_t user_y_speed = 0;
+	
+}
+
+int Game_Modes(uint8_t left_win, uint8_t right_win)
+{	
+	//random speed [-4,4]
+	int8_t x_speed = rand()%9 - 4 ; 
+	int8_t y_speed = rand()%9 - 4;
+	
+	
+	uint8_t x = 79;
+	uint8_t y = 63;
+	uint8_t block_y_speed = 5;
+	uint8_t block_y0 = 43;
+	uint8_t block_y1 = 83; // define computer controlled block
+	//uint8_t user_y0 = 53;
+	//uint8_t user_y1 =73; // define user controlled block l
+	//uint8_t user_y_speed = 0;
+	
+	/*----------------------keep moving--------------------*/
+	if(x_speed == 0)
+	{
+		x_speed += 1;
+	}
+	if(y_speed == 0)
+	{
+		y_speed += 1;
+	}
+	
+	LCD_drawChar( 9 , 9 , left_win , MAGENTA, BLACK);
+	LCD_drawChar( 149 , 9 , right_win, MAGENTA, BLACK);
+	
+	
+	while (1)
+	{	
+		
+		/*----------------user controlled block function-------------*/
+		// invisible
+		LCD_drawBlock(0, user_y0, 3, user_y1, BLACK);
+		
+		if(ADC <520) //go up
+		{
+			if(user_y1 <= 122 )// not to touch the upper bound
+			{
+				user_y_speed = 5;
+			}
+			else
+			{
+				user_y_speed = 0;
+			}
+			
+			
+		}
+		else if(ADC > 560) //go down
+		{	
+			if(user_y0 >= 5) //not to touch the lower bound
+			{
+				user_y_speed = -5;
+			
+			}
+			else
+			{
+				user_y_speed = 0;
+				
+			}
+			
+		}
+		else if (ADC >= 520 && ADC <= 560) // stand still
+		{
+			user_y_speed = 0;
+			
+		}
+		user_y0 = user_y0 + user_y_speed;
+		user_y1 = user_y1 + user_y_speed;
+		LCD_drawBlock(0, user_y0, 3, user_y1, RED); // show the block
+		
+
+		/*-----------------computer block move function------------------*/
+		LCD_drawBlock(156, block_y0, 159, block_y1, BLACK);
+		if(block_y0 <6) // go up
+		{
+			block_y_speed = 5;
+		}
+		else if(block_y1 > 118) // go down
+		{
+			block_y_speed = -5;
+		}
+		block_y0 = block_y0 + block_y_speed;
+		block_y1 = block_y1 + block_y_speed;
+		LCD_drawBlock(156, block_y0, 159, block_y1, RED);
+
+		/*---------------------circle move function-----------------------*/
+		LCD_drawCircle(x, y, R, BLACK); //invisible
+		if(y <= 2 ) // up boundary detection (r=2)
+		{	OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 
+			OCR0B = OCR0A/2;
+			_delay_ms(300);
+			OCR0A = 0; //stop the buzzer
+			OCR0B = OCR0A * 0.05;
+			y_speed = -1 * y_speed; // go back
+		}
+		else if(y >=125) //bottom boundary detection (127-2)
+		{	
+			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18
+			OCR0B = OCR0A/2;
+			_delay_ms(300);
+			OCR0A = 0; //stop the buzzer
+			OCR0B = OCR0A * 0.05;
+			y_speed = -1 * y_speed; // go back
+		}
+		else if(x <= 3) // left boundary detection and round detection
+		{
+			x_speed = -1 * x_speed;
+			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18
+			OCR0B = OCR0A * 0.95;
+			_delay_ms(300);
+			OCR0A = 0; //stop the buzzer
+			OCR0B = OCR0A * 0.95;
+			if(y < user_y0 || y > user_y1) // right wins
+			{	
+				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
+				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
+				PORTD |= (1<<PORTD3); //turn on the red LED
+				_delay_ms(1000);
+				PORTD &= ~(1<<PORTD3); //turn off the red LED
+				return 0; //right wins return 0
+			}
+		}
+		else if(x >= 157)// right boundary detection and round detection
+		{
+			x_speed = -1 * x_speed;
+			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 
+			OCR0B = OCR0A * 0.95;
+			_delay_ms(300);
+			OCR0A = 0; //stop the buzzer
+			OCR0B = OCR0A * 0.95;
+			if (y < block_y0 || y > block_y1 ) // left wins
+			{	
+				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
+				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
+				PORTD |= (1<<PORTD2); // turn on the yellow LED
+				_delay_ms(1000);
+				PORTD &= ~(1<<PORTD2); // turn off the yellow LED
+				return 1; //left wins return 1
+			}
+		}
+		x = x + x_speed; //relocate x and y
+		y = y + y_speed;
+		if(x< 0) // ball fly out of boundary condition
+		{
+			x = 2;
+		}
+		else if (x > 159)
+		{
+			x = 157;
+		}
+		if(y < 0)
+		{
+			y = 2;
+		}
+		else if (y > 127)
+		{
+			y =125;
+		}
+		LCD_drawCircle(x, y, R, WHITE);
+		
+	}
+}
+int main(void)
+{	
+	Initialize();
+	/*----------------------set screen-------------*/
+	//set screen as black
+	LCD_setScreen(BLACK);
+	
+	// Ball with R=6 start to move at the center
+	LCD_drawCircle(X_CENTER, Y_CENTER, R, WHITE);
+	
+	//Paddle of computer with 3*6
+	LCD_drawBlock(156, Y_CENTER-L, 159, Y_CENTER+L, RED);
+	
+	int result;
+	uint8_t left_win = 48; // decimal value to hex value in LUT
+	uint8_t right_win = 48;
+	for(int i = 0; i < 12; i++)
+	{	if(left_win < 50 && right_win < 50)
+		{ 
+			result = Game_Modes(left_win, right_win);
+			if(result == 0) // right wins
+			{
+				right_win = right_win + 1;
+			}
+			else //left wins
+			{
+				left_win = left_win + 1;
+			}
+			LCD_setScreen(BLACK);
+		}
+		else if (left_win >=50 )
+		{
+			LCD_drawString(79, 63, "Left Player Win", MAGENTA, BLACK);
+			break;
+		}
+		else if(right_win >= 50)
+		{
+			LCD_drawString(79, 63, "Right Player Win", MAGENTA, BLACK);
+			break;
+		}
+	}
+	
+	 
+}
