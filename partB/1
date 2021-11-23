@@ -9,7 +9,7 @@
 #define BAUD_RATE 9600
 #define BAUD_PRESCALER (((F_CPU / (BAUD_RATE * 16UL))) - 1)
 #define R 4
-#define L 3
+#define L 15
 #define X_CENTER 79
 #define Y_CENTER 63
 
@@ -25,6 +25,13 @@
 #include <stdio.h>
 
 char String[25];
+
+struct Speed
+{
+	int x;
+	int y;
+};
+struct Speed ball_speed={4,0};
 
 void Initialize()
 {
@@ -116,37 +123,45 @@ ISR (ADC_vect)
 	//UART_putstring(String);
 }
 
+struct Speed set_speed(struct Speed s)
+{
+	s.x=rand()%7-3;
+	s.y=rand()%7-3;
+	if(s.x==0)
+	{
+		s.x+=1;
+	}
+	if(s.y==0)
+	{
+		s.y+=1;
+	}
+	return s;
+}
 
-
-int Game_Modes(uint8_t left_win, uint8_t right_win)
+int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 {	
-	//random speed [-5,5]
-	int8_t ball_speed_x = rand()%7 - 3; 
-	int8_t ball_speed_y = rand()%7 - 3;
+	//initialize ball
+	
+	int8_t ball_speed_x = set_speed(ball_speed).x;
+	int8_t ball_speed_y = set_speed(ball_speed).y;
 	uint8_t ball_x = X_CENTER;
 	uint8_t ball_y = Y_CENTER;
 	
-	uint8_t block_y_speed = 5;
-	uint8_t block_y0 = 43;
-	uint8_t block_y1 = 83; // define computer controlled block
-	uint8_t user_y0 = 53;
-	uint8_t user_y1 =73; // define user controlled block l
-	uint8_t user_y_speed = 0;
+	//initialize computer paddle
+	int8_t computer_speed = 5;
+	uint8_t computer_y0 = Y_CENTER-L;
+	uint8_t computer_y1 = Y_CENTER+L; 
+	
+	//initialize user paddle
+	uint8_t user_speed = 0;
+	uint8_t user_y0 = Y_CENTER-L;
+	uint8_t user_y1 =Y_CENTER+L; // define user controlled block l
+	
 	
 	/*----------------------score board------------------------*/
 	
-	LCD_drawChar( 9 , 9 , left_win , MAGENTA, BLACK);
-	LCD_drawChar( 149 , 9 , right_win, MAGENTA, BLACK);
-	
-	/*----------------------keep ball moving--------------------*/
-	if(ball_speed_x == 0)
-	{
-		ball_speed_x += 1;
-	}
-	if(ball_speed_y == 0)
-	{
-		ball_speed_y += 1;
-	}
+	LCD_drawChar( 10 , 10 , user , CYAN, BLACK);
+	LCD_drawChar( 150 , 10 , computer, CYAN, BLACK);
 	
 
 	while (1)
@@ -160,11 +175,11 @@ int Game_Modes(uint8_t left_win, uint8_t right_win)
 		{
 			if(user_y1 <= 122 )// not to touch the upper bound
 			{
-				user_y_speed = 5;
+				user_speed = 5;
 			}
 			else
 			{
-				user_y_speed = 0;
+				user_speed = 0;
 			}
 			
 			
@@ -173,39 +188,39 @@ int Game_Modes(uint8_t left_win, uint8_t right_win)
 		{	
 			if(user_y0 >= 5) //not to touch the lower bound
 			{
-				user_y_speed = -5;
+				user_speed = -5;
 			
 			}
 			else
 			{
-				user_y_speed = 0;
+				user_speed = 0;
 				
 			}
 			
 		}
 		else if (ADC >= 520 && ADC <= 560) // stand still
 		{
-			user_y_speed = 0;
+			user_speed = 0;
 			
 		}
-		user_y0 = user_y0 + user_y_speed;
-		user_y1 = user_y1 + user_y_speed;
-		LCD_drawBlock(0, user_y0, 3, user_y1, RED); // show the block
+		user_y0 = user_y0 + user_speed;
+		user_y1 = user_y1 + user_speed;
+		LCD_drawBlock(0, user_y0, 3, user_y1, YELLOW); // show the block
 		
 
 		/*-----------------computer block move function------------------*/
-		LCD_drawBlock(156, block_y0, 159, block_y1, BLACK);
-		if(block_y0 <6) // go up
+		LCD_drawBlock(156, computer_y0, 159, computer_y1, BLACK);
+		if(computer_y0 <6) // go up
 		{
-			block_y_speed = 5;
+			computer_speed = 5;
 		}
-		else if(block_y1 > 118) // go down
+		else if(computer_y1 > 118) // go down
 		{
-			block_y_speed = -5;
+			computer_speed = -5;
 		}
-		block_y0 = block_y0 + block_y_speed;
-		block_y1 = block_y1 + block_y_speed;
-		LCD_drawBlock(156, block_y0, 159, block_y1, RED);
+		computer_y0 = computer_y0 + computer_speed;
+		computer_y1 = computer_y1 + computer_speed;
+		LCD_drawBlock(156, computer_y0, 159, computer_y1, RED);
 
 		/*---------------------circle move function-----------------------*/
 		LCD_drawCircle(ball_x, ball_y, R, BLACK); //invisible
@@ -236,8 +251,8 @@ int Game_Modes(uint8_t left_win, uint8_t right_win)
 			OCR0B = OCR0A * 0.95;
 			if(ball_y < user_y0 || ball_y > user_y1) // right wins
 			{	
-				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
-				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
+				LCD_drawChar( 10 , 10 , user, BLACK, BLACK);
+				LCD_drawChar( 150 , 10 , computer, BLACK, BLACK);
 				PORTD |= (1<<PORTD3); //turn on the red LED
 				_delay_ms(1000);
 				PORTD &= ~(1<<PORTD3); //turn off the red LED
@@ -252,10 +267,10 @@ int Game_Modes(uint8_t left_win, uint8_t right_win)
 			_delay_ms(300);
 			OCR0A = 0; //stop the buzzer
 			OCR0B = OCR0A * 0.95;
-			if (ball_y < block_y0 || ball_y > block_y1 ) // left wins
+			if (ball_y < computer_y0 || ball_y > computer_y1 ) // left wins
 			{	
-				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
-				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
+				LCD_drawChar( 10 , 10 , user, BLACK, BLACK);
+				LCD_drawChar( 150 , 10 , computer, BLACK, BLACK);
 				PORTD |= (1<<PORTD2); // turn on the yellow LED
 				_delay_ms(1000);
 				PORTD &= ~(1<<PORTD2); // turn off the yellow LED
@@ -298,30 +313,30 @@ int main(void)
 	//LCD_drawBlock(156, 59, 159, 67, RED);
 	
 	int result;
-	uint8_t left_win = 48; // decimal value to hex value in LUT
-	uint8_t right_win = 48;
+	uint8_t user = 0x30; // decimal value to hex value in LUT
+	uint8_t computer = 0x30;
 	for(int i = 0; i < 12; i++)
-	{	if(left_win < 50 && right_win < 50)
+	{	if(user < 0x32 && computer< 0x32)
 		{ 
-			result = Game_Modes(left_win, right_win);
+			result = Game_Modes(user, computer, ball_speed);
 			if(result == 0) // right wins
 			{
-				right_win = right_win + 1;
+				computer = computer + 1;
 			}
 			else //left wins
 			{
-				left_win = left_win + 1;
+				user = user + 1;
 			}
 			LCD_setScreen(BLACK);
 		}
-		else if (left_win >=50 )
+		else if (user >=0x32 )
 		{
-			LCD_drawString(79, 63, "Left Player Win", MAGENTA, BLACK);
+			LCD_drawString(X_CENTER-35, Y_CENTER, "User Win!", YELLOW, BLACK);
 			break;
 		}
-		else if(right_win >= 50)
+		else if(computer >= 0x32)
 		{
-			LCD_drawString(79, 63, "Right Player Win", MAGENTA, BLACK);
+			LCD_drawString(X_CENTER-35, Y_CENTER, "Computer Win!", RED, BLACK);
 			break;
 		}
 	}
