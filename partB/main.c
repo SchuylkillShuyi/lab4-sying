@@ -10,6 +10,11 @@
 #define F_CPU 16000000UL
 #define BAUD_RATE 9600
 #define BAUD_PRESCALER (((F_CPU / (BAUD_RATE * 16UL))) - 1)
+#define R 4
+#define L 15
+#define X_CENTER 79
+#define Y_CENTER 63
+
 
 #include <avr/io.h>
 #include "ST7735.h"
@@ -23,47 +28,16 @@
 
 char String[25];
 
+struct Speed
+{
+	int x;
+	int y;
+};
+struct Speed ball_speed={4,0};
+
 void Initialize()
 {
-	/*-------------------Set up LCD------------------------*/
-	lcd_init();
-	
-	/*---------------------Set up LED----------------------*/
-	DDRD |= (1<<DDD2); //set PD2 as output for player 1 LED (yellow)
-	DDRD |= (1<<DDD3); //set PD3 as output for player 2 LED (red)
-	
-	/*---------------------Set up buzzer--------------------*/
-	DDRD |= (1<<DDD5); //set pd5 as output
-	
-	/*----------------------set timer0------------------*/
-		
-	TCCR0B |= (1<<CS00); //Set the prescaler
-	TCCR0B &= ~(1<<CS01); //scale with 1024
-	TCCR0B |= (1<<CS02);
-	
-	//pwm phase correct mode
-	TCCR0A |= (1<<WGM00);
-	TCCR0A &= ~(1<<WGM01);
-	TCCR0B |= (1<<WGM02);
-	OCR0A = 0;  // set the top value as 16*10^6/(2*440*1024)=18 but I want it to be quite right now
-	OCR0B = OCR0A/2; //set the OCRnB as 50% duty cycle
-	TCCR0A |= (1<<COM0B1); // clear OC0B on compare match
-	TCCR0A &= ~(1<<COM0B0); // clear OC0B on compare match
-	
-	/*---------------Set up timer 1-----------------*/
-	cli();
-	//timer1 is for LED and buzzer
-	//Timer	1 setup prescaller with 1024
-	TCCR1B |= (1<<CS12);
-	TCCR1B &= ~(1<<CS11);
-	TCCR1B &= ~(1<<CS10);
-	
-	//set timer 1 to normal
-	TCCR1A &= ~(1<<WGM10);
-	TCCR1A &= ~(1<<WGM11);
-	TCCR1B &= ~(1<<WGM12);
-	
-	/*-----------------setup for ADC------------------*/
+	/*---------------------setup for ADC--------------------*/
 	// clear power reduction for ADC
 	PRR &= ~(1<<PRADC);
 	
@@ -76,11 +50,13 @@ void Initialize()
 	ADCSRA |= (1<<ADPS0);
 	ADCSRA |= (1<<ADPS1);
 	ADCSRA |= (1<<ADPS2);
+	
 	//select channel 0
 	ADMUX &= ~(1<<MUX0);
 	ADMUX &= ~(1<<MUX1);
 	ADMUX &= ~(1<<MUX2);
 	ADMUX &= ~(1<<MUX3);
+	
 	//Set to auto trigger
 	ADCSRA |= (1<<ADATE);
 	
@@ -88,224 +64,316 @@ void Initialize()
 	ADCSRB &= ~(1<<ADTS0);
 	ADCSRB &= ~(1<<ADTS1);
 	ADCSRB &= ~(1<<ADTS2);
+	
 	//Disable digital input buffer on ADC pin
 	DIDR0 |= (1<<ADC0D);
+	
 	// Enable ADC
 	ADCSRA |= (1<<ADEN);
+	
 	//Enable ADC Interrupt
 	ADCSRA |= (1<<ADIE);
+	
 	//Start Conversion
 	ADCSRA |= (1<<ADSC);
 	
+	/*---------------------Set up LED----------------------*/
+	//PD2 is output for yellow LED (user win)
+	DDRD |= (1<<DDD2); 
+	
+	//PD3 is output for red LED (computer win)
+	DDRD |= (1<<DDD3); 
+	
+	/*---------------------Set up buzzer--------------------*/
+	//PD5 is output for buzzer
+	DDRD |= (1<<DDD5); 
+	
+	//timer0 for phase correct	
+	//set timer0 to be divided by 1024, which is 15625 Hz
+	TCCR0B |= (1<<CS00); 
+	TCCR0B &= ~(1<<CS01); 
+	TCCR0B |= (1<<CS02);
+	
+	//set timer0 to PWM phase correct mode
+	TCCR0A |= (1<<WGM00);
+	TCCR0A &= ~(1<<WGM01);
+	TCCR0B |= (1<<WGM02);
+	
+	// clear OC0B on compare match
+	TCCR0A &= ~(1<<COM0B0);
+	TCCR0A |= (1<<COM0B1);
+	
+	// clear interrupt flag
+	TIFR0 |= (1<<OCF0A);
+	
+	// mute at the beginning
+	OCR0A = 0; 
+	
+	//set duty cycle as 5%
+	OCR0B = OCR0A* 0.95;
+
+	/*-------------------Set up LCD------------------------*/
+	lcd_init();
 	
 	sei();
-	
-	
-	/*----------------------set screen-------------*/
-	LCD_setScreen(BLACK); //set screen as black
-	LCD_drawCircle(79, 63, 4, GREEN); // initialize ball
-	LCD_drawBlock(156, 59, 159, 67, RED); //initialize computer block
 }
 
-ISR(TIMER1_OVF_vect)
-{
-	
-}
+
 ISR (ADC_vect)
 {
 	//sprintf(String,"ADC : %d \n", ADC);
 	//UART_putstring(String);
 }
 
-int GameStart(uint8_t left_win, uint8_t right_win)
+struct Speed set_speed(struct Speed s)
+{
+	s.x=rand()%7-3;
+	s.y=rand()%7-3;
+	if(s.x==0)
+	{
+		s.x+=1;
+	}
+	if(s.y==0)
+	{
+		s.y+=1;
+	}
+	return s;
+}
+
+uint8_t Computer_Paddle(uint8_t computer_y0)
+{
+	
+}
+
+int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 {	
-	uint8_t x_speed = rand()%7 - 3 ; //random initialize a horizon speed between -5 to 5
-	uint8_t y_speed = rand()%7 - 3; //random initialize a horizon speed between -5 to 5
-	uint8_t x = 79;
-	uint8_t y = 63;
-	uint8_t block_y_speed = 5;
-	uint8_t block_y0 = 43;
-	uint8_t block_y1 = 83; // define computer controlled block
-	uint8_t user_y0 = 53;
-	uint8_t user_y1 =73; // define user controlled block l
-	uint8_t user_y_speed = 0;
+	//initialize ball
+	
+	int8_t ball_speed_x = set_speed(ball_speed).x;
+	int8_t ball_speed_y = set_speed(ball_speed).y;
+	uint8_t ball_x = X_CENTER;
+	uint8_t ball_y = Y_CENTER;
+	
+	//initialize computer paddle
+	int8_t computer_speed = 5;
+	uint8_t computer_y0 = Y_CENTER-L;
+	uint8_t computer_y1 = Y_CENTER+L; 
+	
+	//initialize user paddle
+	uint8_t user_speed = 0;
+	uint8_t user_y0 = Y_CENTER-L;
+	uint8_t user_y1 =Y_CENTER+L; 
 	
 	
-	if(x_speed == 0)
-	{
-		x_speed = x_speed + 1;
-	}
-	if(y_speed == 0)
-	{
-		y_speed = y_speed + 1;
-	}
+	/*----------------------score board------------------------*/
 	
-	LCD_drawChar( 9 , 9 , left_win , MAGENTA, BLACK);
-	LCD_drawChar( 149 , 9 , right_win, MAGENTA, BLACK);
+	LCD_drawChar( 10 , 10 , user , CYAN, BLACK);
+	LCD_drawChar( 150 , 10 , computer, CYAN, BLACK);
+	
+
 	while (1)
 	{	
 		
-		/*----------------user controlled block function-------------*/
-		// invisible
-		LCD_drawBlock(0, user_y0, 3, user_y1, BLACK);
+		/*------------------------user paddle function------------------------*/
+		
+		LCD_drawBlock(0, user_y0, 3, user_y1, BLACK); // invisible
 		
 		if(ADC <520) //go up
 		{
-			if(user_y1 <= 122 )// not to touch the upper bound
+			if(user_y1 <= 122 )// touch the upper bound and bounce
 			{
-				user_y_speed = 5;
+				user_speed = 5;
 			}
 			else
 			{
-				user_y_speed = 0;
+				user_speed = 0;
 			}
-			
-			
 		}
 		else if(ADC > 560) //go down
 		{	
-			if(user_y0 >= 5) //not to touch the lower bound
+			if(user_y0 >= 5) //touch the lower bound and bounce
 			{
-				user_y_speed = -5;
-			
+				user_speed = -5;
 			}
 			else
 			{
-				user_y_speed = 0;
-				
+				user_speed = 0;
 			}
-			
 		}
 		else if (ADC >= 520 && ADC <= 560) // stand still
 		{
-			user_y_speed = 0;
+			user_speed = 0;
 			
 		}
-		user_y0 = user_y0 + user_y_speed;
-		user_y1 = user_y1 + user_y_speed;
-		LCD_drawBlock(0, user_y0, 3, user_y1, RED); // show the block
+		
+		user_y0 = user_y0 + user_speed;
+		user_y1 = user_y1 + user_speed;
+		LCD_drawBlock(0, user_y0, 3, user_y1, YELLOW); 
 		
 
-		/*-----------------computer block move function------------------*/
-		LCD_drawBlock(156, block_y0, 159, block_y1, BLACK);
-		if(block_y0 <6) // go up
+		/*-------------------computer paddle function------------------*/
+		
+		LCD_drawBlock(156, computer_y0, 159, computer_y1, BLACK); //invisible
+		
+		if(computer_y0 < 2) // computer paddle touches the bottom and goes up
 		{
-			block_y_speed = 5;
+			computer_speed = 5;
 		}
-		else if(block_y1 > 118) // go down
+		else if(computer_y1 > 122) // computer paddle touches the ceiling and goes down
 		{
-			block_y_speed = -5;
+			computer_speed = -5;
 		}
-		block_y0 = block_y0 + block_y_speed;
-		block_y1 = block_y1 + block_y_speed;
-		LCD_drawBlock(156, block_y0, 159, block_y1, RED);
+		
+		computer_y0 = computer_y0 + computer_speed;
+		computer_y1 = computer_y1 + computer_speed;
+		LCD_drawBlock(156, computer_y0, 159, computer_y1, RED);
 
 		/*---------------------circle move function-----------------------*/
-		LCD_drawCircle(x, y, 4, BLACK); //invisible
-		if(y <= 2 ) // up boundary detection (r=2)
-		{	OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 
-			OCR0B = OCR0A/2;
-			_delay_ms(300);
-			OCR0A = 0; //stop the buzzer
-			OCR0B = OCR0A/2;
-			y_speed = -1 * y_speed; // go back
-		}
-		else if(y >=125) //bottom boundary detection (127-2)
+		
+		LCD_drawCircle(ball_x, ball_y, R, BLACK); //invisible
+		
+		if(ball_y <= 2 ) // up boundary detection 
 		{	
-			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18
-			OCR0B = OCR0A/2;
-			_delay_ms(300);
+			OCR0A = 3;  // set the top value as 16*10^6/(2*2.5k*1024)=3
+			OCR0B = OCR0A*0.95;
+			
+			_delay_ms(500);
+			
 			OCR0A = 0; //stop the buzzer
-			OCR0B = OCR0A/2;
-			y_speed = -1 * y_speed; // go back
+			OCR0B = OCR0A * 0.95;
+			
+			ball_speed_y = -1 * ball_speed_y; // go back
 		}
-		else if(x <= 3) // left boundary detection and round detection
-		{
-			x_speed = -1 * x_speed;
-			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18
-			OCR0B = OCR0A/2;
-			_delay_ms(300);
+		
+		else if(ball_y >=125) //bottom boundary detection 
+		{	
+			OCR0A = 3;  // set the top value as 16*10^6/(2*2.5k*1024)=3
+			OCR0B = OCR0A* 0.95;
+			
+			_delay_ms(500);
 			OCR0A = 0; //stop the buzzer
-			OCR0B = OCR0A/2;
-			if(y < user_y0 || y > user_y1) // right wins
+			OCR0B = OCR0A * 0.95;
+			
+			ball_speed_y = -1 * ball_speed_y; // go back
+		}
+		
+		else if(ball_x <= 3) // left boundary detection
+		{
+			ball_speed_x = -1 * ball_speed_x;
+			OCR0A = 3;  // set the top value as 16*10^6/(2*2.5k*1024)=3
+			OCR0B = OCR0A * 0.95;
+			
+			_delay_ms(500);
+			
+			OCR0A = 0; //stop the buzzer
+			OCR0B = OCR0A * 0.95;
+			
+			// user wins
+			if(ball_y < user_y0 || ball_y > user_y1) 
 			{	
-				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
-				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
-				PORTD |= (1<<PORTD3); //turn on the red LED
-				_delay_ms(1000);
-				PORTD &= ~(1<<PORTD3); //turn off the red LED
-				return 0; //right wins return 0
+				LCD_drawChar( 10 , 10 , user, BLACK, BLACK);
+				LCD_drawChar( 150 , 10 , computer, BLACK, BLACK);
+				
+				PORTD |= (1<<PORTD3); //turn on the yellow LED
+				_delay_ms(500);
+				PORTD &= ~(1<<PORTD3); //turn off the yellow LED
+				
+				return 0; 
 			}
 		}
-		else if(x >= 157)// right boundary detection and round detection
+		
+		else if(ball_x >= 157)// right boundary detection 
 		{
-			x_speed = -1 * x_speed;
-			OCR0A = 18;  // set the top value as 16*10^6/(2*440*1024)=18 
-			OCR0B = OCR0A/2;
-			_delay_ms(300);
+			ball_speed_x = -1 * ball_speed_x;
+			
+			OCR0A = 3;  // set the top value as 16*10^6/(2*2.5k*1024)=3
+			OCR0B = OCR0A * 0.95;
+			
+			_delay_ms(500);
+			
 			OCR0A = 0; //stop the buzzer
-			OCR0B = OCR0A/2;
-			if (y < block_y0 || y > block_y1 ) // left wins
+			OCR0B = OCR0A * 0.95;
+			
+			if (ball_y < computer_y0 || ball_y > computer_y1 ) // computer wins
 			{	
-				LCD_drawChar( 9 , 9 , left_win, BLACK, BLACK);
-				LCD_drawChar( 149 , 9 , right_win, BLACK, BLACK);
-				PORTD |= (1<<PORTD2); // turn on the yellow LED
-				_delay_ms(1000);
-				PORTD &= ~(1<<PORTD2); // turn off the yellow LED
-				return 1; //left wins return 1
+				LCD_drawChar( 10 , 10 , user, BLACK, BLACK);
+				LCD_drawChar( 150 , 10 , computer, BLACK, BLACK);
+				
+				PORTD |= (1<<PORTD2); // turn on the red LED
+				_delay_ms(500);
+				PORTD &= ~(1<<PORTD2); // turn off the red LED
+				
+				return 1; 
 			}
 		}
-		x = x + x_speed; //relocate x and y
-		y = y + y_speed;
-		if(x< 0) // ball fly out of boundary condition
+		
+		ball_x = ball_x + ball_speed_x; 
+		ball_y = ball_y + ball_speed_y;
+		
+		// ball fly out of boundary condition
+		
+		if(ball_x< 0) 
 		{
-			x = 2;
+			ball_x = 2;
 		}
-		else if (x > 159)
+		else if (ball_x > 159)
 		{
-			x = 157;
+			ball_x = 157;
 		}
-		if(y < 0)
+		if(ball_y < 0)
 		{
-			y = 2;
+			ball_y = 2;
 		}
-		else if (y > 127)
+		else if (ball_y > 127)
 		{
-			y =125;
+			ball_y =125;
 		}
-		LCD_drawCircle(x, y, 4, GREEN);
+		
+		LCD_drawCircle(ball_x, ball_y, R, WHITE);
 		
 	}
 }
+
 int main(void)
 {	
+	int win;
+	uint8_t user = 0x30; 
+	uint8_t computer = 0x30;
+	
 	Initialize();
-	int result;
-	uint8_t left_win = 48; // decimal value to hex value in LUT
-	uint8_t right_win = 48;
-	for(int i = 0; i < 12; i++)
-	{	if(left_win < 50 && right_win < 50)
+	
+	//set screen as black
+	LCD_setScreen(BLACK);
+	
+	LCD_drawString(X_CENTER-40, Y_CENTER, "Game Start", CYAN, BLACK);
+	_delay_ms(1000);
+	LCD_drawString(X_CENTER-40, Y_CENTER, "Game Start", BLACK, BLACK);
+	
+	// Ball with R=4 start to move at the center
+	LCD_drawCircle(X_CENTER, Y_CENTER, R, WHITE);
+	
+	for(int i = 0; i < 5; i++)
+	{	
+		if(user < 0x32 && computer< 0x32)
 		{ 
-			result = GameStart(left_win, right_win);
-			if(result == 0) // right wins
+			win = Game_Modes(user, computer, ball_speed);
+			if(win == 0) // computer wins
 			{
-				right_win = right_win + 1;
+				computer += 1;
 			}
-			else //left wins
+			else //user wins
 			{
-				left_win = left_win + 1;
+				user += 1;
 			}
 			LCD_setScreen(BLACK);
 		}
-		else if (left_win >=50 )
+		else if (user >=0x32 )
 		{
-			LCD_drawString(79, 63, "Left Player Win", MAGENTA, BLACK);
-			break;
+			LCD_drawString(X_CENTER-40, Y_CENTER, "User Win", YELLOW, BLACK);
 		}
-		else if(right_win >= 50)
+		else if(computer >= 0x32)
 		{
-			LCD_drawString(79, 63, "Right Player Win", MAGENTA, BLACK);
-			break;
+			LCD_drawString(X_CENTER-40, Y_CENTER, "Computer Win", RED, BLACK);
 		}
 	}
 	
