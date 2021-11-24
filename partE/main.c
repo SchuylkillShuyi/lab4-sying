@@ -76,11 +76,8 @@ void Initialize()
 	ADCSRA |= (1<<ADSC);
 	
 	/*--------------------wireless control----------------*/
-	//PD4 is the input for up button
+	//PD4 is the input for computer button
 	DDRD &= ~(1<<DDD4);
-	
-	//PD7 is the output for down button
-	DDRD &= ~(1<<DDD7);
 	
 	
 	/*---------------------Set up LED----------------------*/
@@ -226,7 +223,7 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 			if(computer_y1> 122)
 			{
 				
-				computer_speed = -5;
+				computer_speed = 0;
 				
 			}
 			else
@@ -234,27 +231,18 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 				computer_speed =5;
 			}
 		}
-		
-		//down button
-		if(PIND&(1<<PIND7))
+		else
 		{
-			
 			if(computer_y0 <2 )
 			{
-				computer_speed = 5;
+				computer_speed = 0;
 			}
-			else 
+			else
 			{
 				computer_speed=-5;
 			}
 		}
 		
-		//stand still
-		
-		if( (!(PIND&(1<<PIND4))) && (!(PIND&(1<<PIND7))) )
-		{
-			computer_speed = 0;
-		}
 		
 		computer_y0 = computer_y0 + computer_speed;
 		computer_y1 = computer_y1 + computer_speed;
