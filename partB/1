@@ -147,9 +147,11 @@ struct Speed set_speed(struct Speed s)
 uint8_t Computer_Paddle(uint8_t computer_y)
 {
 	//initialize computer paddle
-	int8_t computer_speed = 5;
+	int computer_speed = 5;
 	computer_y = Y_CENTER-L;
 	uint8_t computer_y1 = computer_y+L+L;
+	sprintf(String,"11");
+	UART_putstring(String);
 	
 	LCD_drawBlock(156, computer_y, 159, computer_y1, BLACK); //invisible
 	
@@ -225,7 +227,8 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 	//int8_t computer_speed = 5;
 	//uint8_t computer_y0 = Y_CENTER-L;
 	//uint8_t computer_y1 = Y_CENTER+L; 
-	
+	uint8_t user_y1 =0;
+	uint8_t computer_y1 = 0;
 	
 	
 	//initialize user paddle
@@ -280,11 +283,11 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 		LCD_drawBlock(0, user_y0, 3, user_y1, YELLOW); ------------------------*/
 		
 		user_y0= User_Paddle(user_y0);
-		uint8_t user_y1 = user_y0+L+L;
+		user_y1 = user_y0+L+L;
 		
 		
 		computer_y0 = Computer_Paddle(computer_y0);
-		uint8_t computer_y1 = computer_y0+L+L;
+		computer_y1 = computer_y0+L+L;
 
 
 		/*-------------------computer paddle function
