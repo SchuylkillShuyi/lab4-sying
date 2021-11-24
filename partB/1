@@ -29,7 +29,8 @@
 
 char String[25];
 uint8_t computer_y0=Y_CENTER-L;
-//uint8_t computer_y1=computer_y0+L+L;
+uint8_t user_y0 = Y_CENTER-L;
+
 
 struct Speed
 {
@@ -152,7 +153,7 @@ uint8_t Computer_Paddle(uint8_t computer_y)
 	
 	LCD_drawBlock(156, computer_y, 159, computer_y1, BLACK); //invisible
 	
-	if(computer_y < 2) // computer paddle touches the bottom and goes up
+	if(computer_y < 5) // computer paddle touches the bottom and goes up
 	{
 		computer_speed = 5;
 	}
@@ -168,6 +169,49 @@ uint8_t Computer_Paddle(uint8_t computer_y)
 	return computer_y;
 }
 
+uint8_t User_Paddle(uint8_t user_y)
+{
+	uint8_t user_speed = 0;
+	user_y = Y_CENTER-L;
+	uint8_t user_y1 =user_y+L+L;
+	
+	LCD_drawBlock(0, user_y, 3, user_y1, BLACK); // invisible
+	
+	if(ADC <520) //go up
+	{
+		if(user_y1 <= 122 )// touch the upper bound and bounce
+		{
+			user_speed = 5;
+		}
+		else
+		{
+			user_speed = 0;
+		}
+	}
+	else if(ADC > 560) //go down
+	{
+		if(user_y >= 5) //touch the lower bound and bounce
+		{
+			user_speed = -5;
+		}
+		else
+		{
+			user_speed = 0;
+		}
+	}
+	else if (ADC >= 520 && ADC <= 560) // stand still
+	{
+		user_speed = 0;
+		
+	}
+	
+	user_y = user_y + user_speed;
+	user_y1 = user_y1 + user_speed;
+	LCD_drawBlock(0, user_y, 3, user_y1, YELLOW);
+	
+	return user_y;
+}
+
 int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 {	
 	//initialize ball
@@ -179,15 +223,15 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 	
 	//initialize computer paddle
 	//int8_t computer_speed = 5;
-	uint8_t computer_y0 = Y_CENTER-L;
+	//uint8_t computer_y0 = Y_CENTER-L;
 	//uint8_t computer_y1 = Y_CENTER+L; 
 	
 	
 	
 	//initialize user paddle
-	uint8_t user_speed = 0;
-	uint8_t user_y0 = Y_CENTER-L;
-	uint8_t user_y1 =Y_CENTER+L; 
+	//uint8_t user_speed = 0;
+	//uint8_t user_y0 = Y_CENTER-L;
+	//uint8_t user_y1 =Y_CENTER+L; 
 	
 	
 	/*----------------------score board------------------------*/
@@ -199,7 +243,7 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 	while (1)
 	{	
 		
-		/*------------------------user paddle function------------------------*/
+		/*------------------------user paddle function
 		
 		LCD_drawBlock(0, user_y0, 3, user_y1, BLACK); // invisible
 		
@@ -233,9 +277,12 @@ int Game_Modes(uint8_t user, uint8_t computer, struct Speed s)
 		
 		user_y0 = user_y0 + user_speed;
 		user_y1 = user_y1 + user_speed;
-		LCD_drawBlock(0, user_y0, 3, user_y1, YELLOW); 
+		LCD_drawBlock(0, user_y0, 3, user_y1, YELLOW); ------------------------*/
 		
-		//Computer_Paddle(computer_y0);
+		user_y0= User_Paddle(user_y0);
+		uint8_t user_y1 = user_y0+L+L;
+		
+		
 		computer_y0 = Computer_Paddle(computer_y0);
 		uint8_t computer_y1 = computer_y0+L+L;
 
